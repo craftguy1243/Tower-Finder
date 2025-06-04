@@ -5,3 +5,5 @@ Filter by tower type, city, company, status, and height
 Highlight certain towers to find later or avoid
 
 Displays tower registration number, ASR, and longitude + latitude (suitable for google maps)
+
+Supports loading and saving configurations
