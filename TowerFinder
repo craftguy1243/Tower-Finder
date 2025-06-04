@@ -17,7 +17,7 @@ class ASRBrowser(tk.Tk):
 
         menubar = tk.Menu(self)
         filemenu = tk.Menu(menubar, tearoff=False)
-        filemenu.add_command(label="FCC ASR", command=self.load_file)
+        filemenu.add_command(label="FCC txt file", command=self.load_file)
         filemenu.add_command(label="Load Settings", command=self.load_settings)
         filemenu.add_command(label="Save Settings", command=self.save_settings)
         filemenu.add_separator()
