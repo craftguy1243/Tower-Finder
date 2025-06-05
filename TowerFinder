@@ -186,6 +186,7 @@ class ASRBrowser(tk.Tk):
         self.tree_red.configure(yscrollcommand=vsb_r.set)
         self.tree_red.pack(side="left", fill="both", expand=True)
         vsb_r.pack(side="right", fill="y")
+        self.tree_red.bind("<Double-1>", self.copy_cell_to_clipboard)
         self.tree_green=ttk.Treeview(frame_green, columns=columns, show="headings")
         for col in columns:
             self.tree_green.heading(col, text=col)
@@ -195,6 +196,7 @@ class ASRBrowser(tk.Tk):
         self.tree_green.configure(yscrollcommand=vsb_g.set)
         self.tree_green.pack(side="left", fill="both", expand=True)
         vsb_g.pack(side="right", fill="y")
+        self.tree_green.bind("<Double-1>", self.copy_cell_to_clipboard)
         self.tree_yellow=ttk.Treeview(frame_yellow, columns=columns, show="headings")
         for col in columns:
             self.tree_yellow.heading(col, text=col)
@@ -204,6 +206,7 @@ class ASRBrowser(tk.Tk):
         self.tree_yellow.configure(yscrollcommand=vsb_y.set)
         self.tree_yellow.pack(side="left", fill="both", expand=True)
         vsb_y.pack(side="right", fill="y")
+        self.tree_yellow.bind("<Double-1>", self.copy_cell_to_clipboard)
         self.tree_blue=ttk.Treeview(frame_blue, columns=columns, show="headings")
         for col in columns:
             self.tree_blue.heading(col, text=col)
@@ -213,6 +216,7 @@ class ASRBrowser(tk.Tk):
         self.tree_blue.configure(yscrollcommand=vsb_b.set)
         self.tree_blue.pack(side="left", fill="both", expand=True)
         vsb_b.pack(side="right", fill="y")
+        self.tree_blue.bind("<Double-1>", self.copy_cell_to_clipboard)
 
     def load_file(self):
         path=filedialog.askopenfilename(title="FCC txt file", filetypes=[("Text files","*.txt"),("All files","*.*")])
@@ -602,25 +606,31 @@ class ASRBrowser(tk.Tk):
         self.update_highlight_tabs()
 
     def copy_cell_to_clipboard(self,event):
-        item_id=self.tree.identify_row(event.y)
-        column_id=self.tree.identify_column(event.x)
-        if not item_id or not column_id: return
+        tree = event.widget
+        item_id = tree.identify_row(event.y)
+        column_id = tree.identify_column(event.x)
+        if not item_id or not column_id:
+            return
         try:
-            col_index=int(column_id.replace("#",""))-1
-            values=self.tree.item(item_id,"values")
+            col_index = int(column_id.replace("#", "")) - 1
+            values = tree.item(item_id, "values")
         except:
             return
-        if col_index in (7,8):
-            lat=values[7]; lon=values[8]
-            if lat!="—" and lon!="—":
-                cell_value=f"{lat},{lon}"; col_name="Lat/Long"
+        if col_index in (7, 8):
+            lat = values[7]
+            lon = values[8]
+            if lat != "—" and lon != "—":
+                cell_value = f"{lat},{lon}"
+                col_name = "Lat/Long"
             else:
-                cell_value=values[col_index]; col_name=self.tree.heading(column_id)["text"]
+                cell_value = values[col_index]
+                col_name = tree.heading(column_id)["text"]
         else:
-            cell_value=values[col_index]; col_name=self.tree.heading(column_id)["text"]
+            cell_value = values[col_index]
+            col_name = tree.heading(column_id)["text"]
         self.clipboard_clear()
         self.clipboard_append(cell_value)
-        messagebox.showinfo("Copied",f"{col_name} '{cell_value}' copied to clipboard")
+        messagebox.showinfo("Copied", f"{col_name} '{cell_value}' copied to clipboard")
 
     def update_highlight_tabs(self):
         for tree,color,tag in ((self.tree_red,"red","highlighted_red"),(self.tree_green,"green","highlighted_green"),(self.tree_yellow,"yellow","highlighted_yellow"),(self.tree_blue,"blue","highlighted_blue")):
