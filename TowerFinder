@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import csv
@@ -139,10 +140,12 @@ class ASRBrowser(tk.Tk):
         frame_red=ttk.Frame(self.notebook)
         frame_green=ttk.Frame(self.notebook)
         frame_yellow=ttk.Frame(self.notebook)
+        frame_blue=ttk.Frame(self.notebook)
         self.notebook.add(frame_all, text="All")
         self.notebook.add(frame_red, text="Red")
         self.notebook.add(frame_green, text="Green")
         self.notebook.add(frame_yellow, text="Yellow")
+        self.notebook.add(frame_blue, text="Blue")
         tree_frame=ttk.Frame(frame_all)
         tree_frame.grid(row=0, column=0, sticky="nsew")
         frame_all.rowconfigure(0, weight=1)
@@ -162,6 +165,7 @@ class ASRBrowser(tk.Tk):
         self.tree.tag_configure('highlighted_red', background='red')
         self.tree.tag_configure('highlighted_green', background='green')
         self.tree.tag_configure('highlighted_yellow', background='yellow')
+        self.tree.tag_configure('highlighted_blue', background='blue')
         vsb=ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
@@ -172,6 +176,7 @@ class ASRBrowser(tk.Tk):
         self.tree.bind("<KeyPress-x>", self.on_toggle_red)
         self.tree.bind("<KeyPress-g>", self.on_toggle_green)
         self.tree.bind("<KeyPress-m>", self.on_toggle_yellow)
+        self.tree.bind("<KeyPress-b>", self.on_toggle_blue)
         self.tree_red=ttk.Treeview(frame_red, columns=columns, show="headings")
         for col in columns:
             self.tree_red.heading(col, text=col)
@@ -199,6 +204,15 @@ class ASRBrowser(tk.Tk):
         self.tree_yellow.configure(yscrollcommand=vsb_y.set)
         self.tree_yellow.pack(side="left", fill="both", expand=True)
         vsb_y.pack(side="right", fill="y")
+        self.tree_blue=ttk.Treeview(frame_blue, columns=columns, show="headings")
+        for col in columns:
+            self.tree_blue.heading(col, text=col)
+            self.tree_blue.column(col, anchor="center", width=100)
+        self.tree_blue.tag_configure('highlighted_blue', background='blue')
+        vsb_b=ttk.Scrollbar(frame_blue, orient="vertical", command=self.tree_blue.yview)
+        self.tree_blue.configure(yscrollcommand=vsb_b.set)
+        self.tree_blue.pack(side="left", fill="both", expand=True)
+        vsb_b.pack(side="right", fill="y")
 
     def load_file(self):
         path=filedialog.askopenfilename(title="FCC txt file", filetypes=[("Text files","*.txt"),("All files","*.*")])
@@ -242,12 +256,16 @@ class ASRBrowser(tk.Tk):
         if not data_file:
             messagebox.showerror("Error","Settings file missing data_file entry.")
             return
+        normalized_path=os.path.normpath(data_file)
+        if not os.path.isfile(normalized_path):
+            messagebox.showerror("Error",f"ASR data file not found:\n{normalized_path}")
+            return
         try:
-            self.parse_asr_file(data_file)
+            self.parse_asr_file(normalized_path)
         except Exception as e:
             messagebox.showerror("Error",f"Failed to load ASR file:\n{e}")
             return
-        self.current_file=data_file
+        self.current_file=normalized_path
         self.build_entries()
         filters=data.get("filters",{})
         self.selected_types=set(filters.get("types",[]))
@@ -508,6 +526,7 @@ class ASRBrowser(tk.Tk):
             if color=="red": tags=('highlighted_red',)
             elif color=="green": tags=('highlighted_green',)
             elif color=="yellow": tags=('highlighted_yellow',)
+            elif color=="blue": tags=('highlighted_blue',)
             self.tree.insert("", "end", values=(entry["regno"],entry["asr"],entry["tower_type"],entry["city"],entry["company"],entry["status"],entry["height_ft"],entry["latitude"],entry["longitude"]), tags=tags)
 
     def sort_by_height(self):
@@ -566,6 +585,22 @@ class ASRBrowser(tk.Tk):
         self.apply_filters()
         self.update_highlight_tabs()
 
+    def on_toggle_blue(self,event):
+        self.tree.focus_set()
+        selected=self.tree.selection()
+        if not selected: return
+        item_id=selected[0]
+        values=self.tree.item(item_id,"values")
+        if not values: return
+        asr=values[1]
+        current_color=self.highlighted_colors.get(asr)
+        if current_color=="blue":
+            del self.highlighted_colors[asr]
+        else:
+            self.highlighted_colors[asr]="blue"
+        self.apply_filters()
+        self.update_highlight_tabs()
+
     def copy_cell_to_clipboard(self,event):
         item_id=self.tree.identify_row(event.y)
         column_id=self.tree.identify_column(event.x)
@@ -588,7 +623,7 @@ class ASRBrowser(tk.Tk):
         messagebox.showinfo("Copied",f"{col_name} '{cell_value}' copied to clipboard")
 
     def update_highlight_tabs(self):
-        for tree,color,tag in ((self.tree_red,"red","highlighted_red"),(self.tree_green,"green","highlighted_green"),(self.tree_yellow,"yellow","highlighted_yellow")):
+        for tree,color,tag in ((self.tree_red,"red","highlighted_red"),(self.tree_green,"green","highlighted_green"),(self.tree_yellow,"yellow","highlighted_yellow"),(self.tree_blue,"blue","highlighted_blue")):
             for row in tree.get_children():
                 tree.delete(row)
             for entry in self.entries:
