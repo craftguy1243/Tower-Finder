@@ -1,40 +1,67 @@
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import csv
 import datetime
 from collections import defaultdict
 import json
+import folium
+import webbrowser
+from tempfile import NamedTemporaryFile
+import threading
+import http.server
+import socketserver
+
+def resource_path(relative_path):
+   
+    try:
+       
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class ASRBrowser(tk.Tk):
     def __init__(self):
         super().__init__()
+
+      
+        icon_path = resource_path("icon.ico")
+        try:
+            self.iconbitmap(icon_path)
+        except Exception:
+         
+            pass
+
         self.title("Tower Finder")
         self.geometry("1400x900")
         self.configure(padx=10, pady=10)
-        self.current_file=None
-        self.highlighted_colors={}
-        self.selected_types=set()
-        self.selected_cities=set()
-        self.selected_statuses=set()
-        self.selected_companies=set()
-        self.excluded_types=set()
-        self.excluded_cities=set()
-        self.excluded_statuses=set()
-        self.excluded_companies=set()
-        self.sorting_enabled=False
-        self.sort_descending=False
-        self.ra_data={}
-        self.en_data={}
-        self.hs_data=defaultdict(list)
-        self.co_data={}
-        self.entries=[]
-        self.all_types=[]
-        self.all_cities=[]
-        self.all_statuses=[]
-        self.all_companies=[]
-        menubar=tk.Menu(self)
-        filemenu=tk.Menu(menubar, tearoff=False)
+
+        self.current_file = None
+        self.highlighted_colors = {}
+        self.selected_types = set()
+        self.selected_cities = set()
+        self.selected_statuses = set()
+        self.selected_companies = set()
+        self.excluded_types = set()
+        self.excluded_cities = set()
+        self.excluded_statuses = set()
+        self.excluded_companies = set()
+        self.sorting_enabled = False
+        self.sort_descending = False
+        self.ra_data = {}
+        self.en_data = {}
+        self.hs_data = defaultdict(list)
+        self.co_data = {}
+        self.entries = []
+        self.all_types = []
+        self.all_cities = []
+        self.all_statuses = []
+        self.all_companies = []
+
+        menubar = tk.Menu(self)
+        filemenu = tk.Menu(menubar, tearoff=False)
         filemenu.add_command(label="FCC txt file", command=self.load_file)
         filemenu.add_command(label="Load Settings", command=self.load_settings)
         filemenu.add_command(label="Save Settings", command=self.save_settings)
@@ -42,131 +69,145 @@ class ASRBrowser(tk.Tk):
         filemenu.add_command(label="Exit", command=self.destroy)
         menubar.add_cascade(label="Import and close", menu=filemenu)
         self.config(menu=menubar)
-        filter_frame=ttk.LabelFrame(self, text="Filter")
+
+        filter_frame = ttk.LabelFrame(self, text="Filter")
         filter_frame.grid(row=0, column=0, sticky="ew", pady=(0,10))
         for col in range(12):
             filter_frame.columnconfigure(col, weight=0)
         for col in (0,2,4,6,8):
             filter_frame.columnconfigure(col, weight=1)
-        frame_type=ttk.Frame(filter_frame)
+
+    
+        frame_type = ttk.Frame(filter_frame)
         frame_type.grid(row=0, column=0, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_type.columnconfigure(0, weight=1)
         frame_type.rowconfigure(2, weight=1)
         ttk.Label(frame_type, text="Tower Type:").grid(row=0, column=0, sticky="w")
-        self.entry_type=ttk.Entry(frame_type)
+        self.entry_type = ttk.Entry(frame_type)
         self.entry_type.grid(row=1, column=0, sticky="ew", pady=(2,2))
         self.entry_type.bind("<KeyRelease>", lambda e: self.update_listbox("type"))
-        self.listbox_type_frame=ttk.Frame(frame_type)
+        self.listbox_type_frame = ttk.Frame(frame_type)
         self.listbox_type_frame.grid(row=2, column=0, sticky="nsew")
-        self.listbox_type=tk.Listbox(self.listbox_type_frame, selectmode="multiple", exportselection=False)
+        self.listbox_type = tk.Listbox(self.listbox_type_frame, selectmode="multiple", exportselection=False)
         self.listbox_type.pack(side="left", fill="both", expand=True)
         self.listbox_type.bind("<<ListboxSelect>>", lambda e: self.on_type_select())
         self.listbox_type.bind("<Button-1>", lambda e: self.on_type_click(e))
-        scrollbar_type=ttk.Scrollbar(self.listbox_type_frame, orient="vertical", command=self.listbox_type.yview)
+        scrollbar_type = ttk.Scrollbar(self.listbox_type_frame, orient="vertical", command=self.listbox_type.yview)
         self.listbox_type.configure(yscrollcommand=scrollbar_type.set)
         scrollbar_type.pack(side="right", fill="y")
-        frame_city=ttk.Frame(filter_frame)
+
+      
+        frame_city = ttk.Frame(filter_frame)
         frame_city.grid(row=0, column=2, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_city.columnconfigure(0, weight=1)
         frame_city.rowconfigure(2, weight=1)
         ttk.Label(frame_city, text="City:").grid(row=0, column=0, sticky="w")
-        self.entry_city=ttk.Entry(frame_city)
+        self.entry_city = ttk.Entry(frame_city)
         self.entry_city.grid(row=1, column=0, sticky="ew", pady=(2,2))
         self.entry_city.bind("<KeyRelease>", lambda e: self.update_listbox("city"))
-        self.listbox_city_frame=ttk.Frame(frame_city)
+        self.listbox_city_frame = ttk.Frame(frame_city)
         self.listbox_city_frame.grid(row=2, column=0, sticky="nsew")
-        self.listbox_city=tk.Listbox(self.listbox_city_frame, selectmode="multiple", exportselection=False)
+        self.listbox_city = tk.Listbox(self.listbox_city_frame, selectmode="multiple", exportselection=False)
         self.listbox_city.pack(side="left", fill="both", expand=True)
         self.listbox_city.bind("<<ListboxSelect>>", lambda e: self.on_city_select())
         self.listbox_city.bind("<Button-1>", lambda e: self.on_city_click(e))
-        scrollbar_city=ttk.Scrollbar(self.listbox_city_frame, orient="vertical", command=self.listbox_city.yview)
+        scrollbar_city = ttk.Scrollbar(self.listbox_city_frame, orient="vertical", command=self.listbox_city.yview)
         self.listbox_city.configure(yscrollcommand=scrollbar_city.set)
         scrollbar_city.pack(side="right", fill="y")
-        frame_status=ttk.Frame(filter_frame)
+
+ 
+        frame_status = ttk.Frame(filter_frame)
         frame_status.grid(row=0, column=4, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_status.columnconfigure(0, weight=1)
         frame_status.rowconfigure(2, weight=1)
         ttk.Label(frame_status, text="Status:").grid(row=0, column=0, sticky="w")
-        self.entry_status=ttk.Entry(frame_status)
+        self.entry_status = ttk.Entry(frame_status)
         self.entry_status.grid(row=1, column=0, sticky="ew", pady=(2,2))
         self.entry_status.bind("<KeyRelease>", lambda e: self.update_listbox("status"))
-        self.listbox_status_frame=ttk.Frame(frame_status)
+        self.listbox_status_frame = ttk.Frame(frame_status)
         self.listbox_status_frame.grid(row=2, column=0, sticky="nsew")
-        self.listbox_status=tk.Listbox(self.listbox_status_frame, selectmode="multiple", exportselection=False)
+        self.listbox_status = tk.Listbox(self.listbox_status_frame, selectmode="multiple", exportselection=False)
         self.listbox_status.pack(side="left", fill="both", expand=True)
         self.listbox_status.bind("<<ListboxSelect>>", lambda e: self.on_status_select())
         self.listbox_status.bind("<Button-1>", lambda e: self.on_status_click(e))
-        scrollbar_status=ttk.Scrollbar(self.listbox_status_frame, orient="vertical", command=self.listbox_status.yview)
+        scrollbar_status = ttk.Scrollbar(self.listbox_status_frame, orient="vertical", command=self.listbox_status.yview)
         self.listbox_status.configure(yscrollcommand=scrollbar_status.set)
         scrollbar_status.pack(side="right", fill="y")
-        frame_company=ttk.Frame(filter_frame)
+
+     
+        frame_company = ttk.Frame(filter_frame)
         frame_company.grid(row=0, column=6, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_company.columnconfigure(0, weight=1)
         frame_company.rowconfigure(2, weight=1)
         ttk.Label(frame_company, text="Company:").grid(row=0, column=0, sticky="w")
-        self.entry_company=ttk.Entry(frame_company)
+        self.entry_company = ttk.Entry(frame_company)
         self.entry_company.grid(row=1, column=0, sticky="ew", pady=(2,2))
         self.entry_company.bind("<KeyRelease>", lambda e: self.update_listbox("company"))
-        self.listbox_company_frame=ttk.Frame(frame_company)
+        self.listbox_company_frame = ttk.Frame(frame_company)
         self.listbox_company_frame.grid(row=2, column=0, sticky="nsew")
-        self.listbox_company=tk.Listbox(self.listbox_company_frame, selectmode="multiple", exportselection=False)
+        self.listbox_company = tk.Listbox(self.listbox_company_frame, selectmode="multiple", exportselection=False)
         self.listbox_company.pack(side="left", fill="both", expand=True)
         self.listbox_company.bind("<<ListboxSelect>>", lambda e: self.on_company_select())
         self.listbox_company.bind("<Button-1>", lambda e: self.on_company_click(e))
-        scrollbar_company=ttk.Scrollbar(self.listbox_company_frame, orient="vertical", command=self.listbox_company.yview)
+        scrollbar_company = ttk.Scrollbar(self.listbox_company_frame, orient="vertical", command=self.listbox_company.yview)
         self.listbox_company.configure(yscrollcommand=scrollbar_company.set)
         scrollbar_company.pack(side="right", fill="y")
-        frame_height=ttk.Frame(filter_frame)
+
+        frame_height = ttk.Frame(filter_frame)
         frame_height.grid(row=0, column=8, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_height.columnconfigure(0, weight=1)
         frame_height.columnconfigure(1, weight=1)
         ttk.Label(frame_height, text="Min Height (ft):").grid(row=0, column=0, sticky="w")
-        self.entry_height_min=ttk.Entry(frame_height, width=10)
+        self.entry_height_min = ttk.Entry(frame_height, width=10)
         self.entry_height_min.grid(row=1, column=0, sticky="ew", pady=(2,2))
         self.entry_height_min.bind("<KeyRelease>", lambda e: self.apply_filters())
         ttk.Label(frame_height, text="Max Height (ft):").grid(row=0, column=1, sticky="w")
-        self.entry_height_max=ttk.Entry(frame_height, width=10)
+        self.entry_height_max = ttk.Entry(frame_height, width=10)
         self.entry_height_max.grid(row=1, column=1, sticky="ew", pady=(2,2))
         self.entry_height_max.bind("<KeyRelease>", lambda e: self.apply_filters())
-        btn_clear=ttk.Button(filter_frame, text="Reset Filter", command=self.clear_filters)
+
+        btn_clear = ttk.Button(filter_frame, text="Reset Filter", command=self.clear_filters)
         btn_clear.grid(row=0, column=10, rowspan=3, padx=(10,5), pady=5, sticky="n")
-        btn_sort=ttk.Button(filter_frame, text="Sort Height", command=self.sort_by_height)
+        btn_sort = ttk.Button(filter_frame, text="Sort Height", command=self.sort_by_height)
         btn_sort.grid(row=0, column=11, rowspan=3, padx=(5,5), pady=5, sticky="n")
+
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
-        self.notebook=ttk.Notebook(self)
+
+        self.notebook = ttk.Notebook(self)
         self.notebook.grid(row=1, column=0, sticky="nsew")
-        frame_all=ttk.Frame(self.notebook)
-        frame_red=ttk.Frame(self.notebook)
-        frame_green=ttk.Frame(self.notebook)
-        frame_yellow=ttk.Frame(self.notebook)
-        frame_blue=ttk.Frame(self.notebook)
+        frame_all = ttk.Frame(self.notebook)
+        frame_red = ttk.Frame(self.notebook)
+        frame_green = ttk.Frame(self.notebook)
+        frame_yellow = ttk.Frame(self.notebook)
+        frame_blue = ttk.Frame(self.notebook)
         self.notebook.add(frame_all, text="All")
         self.notebook.add(frame_red, text="Red")
         self.notebook.add(frame_green, text="Green")
         self.notebook.add(frame_yellow, text="Yellow")
         self.notebook.add(frame_blue, text="Blue")
-        tree_frame=ttk.Frame(frame_all)
+
+        tree_frame = ttk.Frame(frame_all)
         tree_frame.grid(row=0, column=0, sticky="nsew")
         frame_all.rowconfigure(0, weight=1)
         frame_all.columnconfigure(0, weight=1)
-        columns=("RegNo","ASR","Type","City","Company","Status","Height (ft)","Latitude","Longitude")
-        self.tree=ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
+        columns = ("RegNo","ASR","Type","City","Company","Status","Height (ft)","Latitude","Longitude")
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             self.tree.heading(col, text=col)
-            width=100
-            if col=="Type": width=150
-            if col=="City": width=150
-            if col=="Company": width=200
-            if col=="Height (ft)": width=120
-            if col=="Latitude" or col=="Longitude": width=120
-            if col=="RegNo" or col=="ASR" or col=="Status": width=80
+            width = 100
+            if col == "Type": width = 150
+            if col == "City": width = 150
+            if col == "Company": width = 200
+            if col == "Height (ft)": width = 120
+            if col in ("Latitude", "Longitude"): width = 120
+            if col in ("RegNo", "ASR", "Status"): width = 80
             self.tree.column(col, anchor="center", width=width)
         self.tree.tag_configure('highlighted_red', background='red')
         self.tree.tag_configure('highlighted_green', background='green')
         self.tree.tag_configure('highlighted_yellow', background='yellow')
         self.tree.tag_configure('highlighted_blue', background='blue')
-        vsb=ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
@@ -177,126 +218,156 @@ class ASRBrowser(tk.Tk):
         self.tree.bind("<KeyPress-g>", self.on_toggle_green)
         self.tree.bind("<KeyPress-m>", self.on_toggle_yellow)
         self.tree.bind("<KeyPress-b>", self.on_toggle_blue)
-        self.tree_red=ttk.Treeview(frame_red, columns=columns, show="headings")
+
+        self.tree_red = ttk.Treeview(frame_red, columns=columns, show="headings")
         for col in columns:
             self.tree_red.heading(col, text=col)
             self.tree_red.column(col, anchor="center", width=100)
         self.tree_red.tag_configure('highlighted_red', background='red')
-        vsb_r=ttk.Scrollbar(frame_red, orient="vertical", command=self.tree_red.yview)
+        vsb_r = ttk.Scrollbar(frame_red, orient="vertical", command=self.tree_red.yview)
         self.tree_red.configure(yscrollcommand=vsb_r.set)
         self.tree_red.pack(side="left", fill="both", expand=True)
         vsb_r.pack(side="right", fill="y")
         self.tree_red.bind("<Double-1>", self.copy_cell_to_clipboard)
-        self.tree_green=ttk.Treeview(frame_green, columns=columns, show="headings")
+
+        self.tree_green = ttk.Treeview(frame_green, columns=columns, show="headings")
         for col in columns:
             self.tree_green.heading(col, text=col)
             self.tree_green.column(col, anchor="center", width=100)
         self.tree_green.tag_configure('highlighted_green', background='green')
-        vsb_g=ttk.Scrollbar(frame_green, orient="vertical", command=self.tree_green.yview)
+        vsb_g = ttk.Scrollbar(frame_green, orient="vertical", command=self.tree_green.yview)
         self.tree_green.configure(yscrollcommand=vsb_g.set)
         self.tree_green.pack(side="left", fill="both", expand=True)
         vsb_g.pack(side="right", fill="y")
         self.tree_green.bind("<Double-1>", self.copy_cell_to_clipboard)
-        self.tree_yellow=ttk.Treeview(frame_yellow, columns=columns, show="headings")
+
+        self.tree_yellow = ttk.Treeview(frame_yellow, columns=columns, show="headings")
         for col in columns:
             self.tree_yellow.heading(col, text=col)
             self.tree_yellow.column(col, anchor="center", width=100)
         self.tree_yellow.tag_configure('highlighted_yellow', background='yellow')
-        vsb_y=ttk.Scrollbar(frame_yellow, orient="vertical", command=self.tree_yellow.yview)
+        vsb_y = ttk.Scrollbar(frame_yellow, orient="vertical", command=self.tree_yellow.yview)
         self.tree_yellow.configure(yscrollcommand=vsb_y.set)
         self.tree_yellow.pack(side="left", fill="both", expand=True)
         vsb_y.pack(side="right", fill="y")
         self.tree_yellow.bind("<Double-1>", self.copy_cell_to_clipboard)
-        self.tree_blue=ttk.Treeview(frame_blue, columns=columns, show="headings")
+
+        self.tree_blue = ttk.Treeview(frame_blue, columns=columns, show="headings")
         for col in columns:
             self.tree_blue.heading(col, text=col)
             self.tree_blue.column(col, anchor="center", width=100)
         self.tree_blue.tag_configure('highlighted_blue', background='blue')
-        vsb_b=ttk.Scrollbar(frame_blue, orient="vertical", command=self.tree_blue.yview)
+        vsb_b = ttk.Scrollbar(frame_blue, orient="vertical", command=self.tree_blue.yview)
         self.tree_blue.configure(yscrollcommand=vsb_b.set)
         self.tree_blue.pack(side="left", fill="both", expand=True)
         vsb_b.pack(side="right", fill="y")
         self.tree_blue.bind("<Double-1>", self.copy_cell_to_clipboard)
 
+     
+        map_btn = ttk.Button(self, text="Show Map", command=self.show_map)
+        map_btn.grid(row=2, column=0, pady=(10,0))
+
+
     def load_file(self):
-        path=filedialog.askopenfilename(title="FCC txt file", filetypes=[("Text files","*.txt"),("All files","*.*")])
-        if not path: return
+        path = filedialog.askopenfilename(title="FCC txt file", filetypes=[("Text files","*.txt"),("All files","*.*")])
+        if not path:
+            return
         try:
             self.parse_asr_file(path)
         except Exception as e:
             messagebox.showerror("Error parsing file", str(e))
             return
-        self.current_file=path
+        self.current_file = path
         self.build_entries()
         self.populate_filters()
         self.apply_filters()
         self.update_highlight_tabs()
 
+
     def save_settings(self):
         if not self.current_file:
-            messagebox.showerror("No file loaded","Please load an ASR file before saving settings.")
+            messagebox.showerror("No file loaded", "Please load an ASR file before saving settings.")
             return
-        save_path=filedialog.asksaveasfilename(title="Save Settings As", defaultextension=".json", filetypes=[("JSON files","*.json"),("All files","*.*")])
-        if not save_path: return
-        filters={"types":list(self.selected_types),"cities":list(self.selected_cities),"statuses":list(self.selected_statuses),"companies":list(self.selected_companies),"height_min":self.entry_height_min.get().strip(),"height_max":self.entry_height_max.get().strip()}
-        save_data={"data_file":self.current_file,"filters":filters,"highlighted":self.highlighted_colors}
+        save_path = filedialog.asksaveasfilename(title="Save Settings As", defaultextension=".json", filetypes=[("JSON files","*.json"),("All files","*.*")])
+        if not save_path:
+            return
+        filters = {
+            "types": list(self.selected_types),
+            "cities": list(self.selected_cities),
+            "statuses": list(self.selected_statuses),
+            "companies": list(self.selected_companies),
+            "height_min": self.entry_height_min.get().strip(),
+            "height_max": self.entry_height_max.get().strip()
+        }
+        save_data = {
+            "data_file": self.current_file,
+            "filters": filters,
+            "highlighted": self.highlighted_colors
+        }
         try:
-            with open(save_path,'w',encoding="utf-8") as f:
-                json.dump(save_data,f,indent=4)
-            messagebox.showinfo("Settings Saved",f"Settings saved to:\n{save_path}")
+            with open(save_path, 'w', encoding="utf-8") as f:
+                json.dump(save_data, f, indent=4)
+            messagebox.showinfo("Settings Saved", f"Settings saved to:\n{save_path}")
         except Exception as e:
-            messagebox.showerror("Error Saving",str(e))
+            messagebox.showerror("Error Saving", str(e))
+
 
     def load_settings(self):
-        path=filedialog.askopenfilename(title="Load Settings", defaultextension=".json", filetypes=[("JSON files","*.json"),("All files","*.*")])
-        if not path: return
+        path = filedialog.askopenfilename(title="Load Settings", defaultextension=".json", filetypes=[("JSON files","*.json"),("All files","*.*")])
+        if not path:
+            return
         try:
-            with open(path,'r',encoding="utf-8") as f:
-                data=json.load(f)
+            with open(path, 'r', encoding="utf-8") as f:
+                data = json.load(f)
         except Exception as e:
-            messagebox.showerror("Error",f"Failed to load settings:\n{e}")
+            messagebox.showerror("Error", f"Failed to load settings:\n{e}")
             return
-        data_file=data.get("data_file")
+
+        data_file = data.get("data_file")
         if not data_file:
-            messagebox.showerror("Error","Settings file missing data_file entry.")
+            messagebox.showerror("Error", "Settings file missing data_file entry.")
             return
-        normalized_path=os.path.normpath(data_file)
+        normalized_path = os.path.normpath(data_file)
         if not os.path.isfile(normalized_path):
-            messagebox.showerror("Error",f"ASR data file not found:\n{normalized_path}")
+            messagebox.showerror("Error", f"ASR data file not found:\n{normalized_path}")
             return
         try:
             self.parse_asr_file(normalized_path)
         except Exception as e:
-            messagebox.showerror("Error",f"Failed to load ASR file:\n{e}")
+            messagebox.showerror("Error", f"Failed to load ASR file:\n{e}")
             return
-        self.current_file=normalized_path
+
+        self.current_file = normalized_path
         self.build_entries()
-        filters=data.get("filters",{})
-        self.selected_types=set(filters.get("types",[]))
-        self.selected_cities=set(filters.get("cities",[]))
-        self.selected_statuses=set(filters.get("statuses",[]))
-        self.selected_companies=set(filters.get("companies",[]))
-        self.entry_height_min.delete(0,tk.END)
-        self.entry_height_min.insert(0,filters.get("height_min",""))
-        self.entry_height_max.delete(0,tk.END)
-        self.entry_height_max.insert(0,filters.get("height_max",""))
-        loaded_highlighted=data.get("highlighted",{})
-        if isinstance(loaded_highlighted,list):
-            self.highlighted_colors={asr:"red" for asr in loaded_highlighted}
-        elif isinstance(loaded_highlighted,dict):
-            self.highlighted_colors=loaded_highlighted.copy()
+        filters = data.get("filters", {})
+        self.selected_types = set(filters.get("types", []))
+        self.selected_cities = set(filters.get("cities", []))
+        self.selected_statuses = set(filters.get("statuses", []))
+        self.selected_companies = set(filters.get("companies", []))
+        self.entry_height_min.delete(0, tk.END)
+        self.entry_height_min.insert(0, filters.get("height_min", ""))
+        self.entry_height_max.delete(0, tk.END)
+        self.entry_height_max.insert(0, filters.get("height_max", ""))
+
+        loaded_highlighted = data.get("highlighted", {})
+        if isinstance(loaded_highlighted, list):
+            self.highlighted_colors = {asr: "red" for asr in loaded_highlighted}
+        elif isinstance(loaded_highlighted, dict):
+            self.highlighted_colors = loaded_highlighted.copy()
         else:
-            self.highlighted_colors={}
+            self.highlighted_colors = {}
+
         self.excluded_types.clear()
         self.excluded_cities.clear()
         self.excluded_statuses.clear()
         self.excluded_companies.clear()
-        self.sorting_enabled=False
-        self.sort_descending=False
+        self.sorting_enabled = False
+        self.sort_descending = False
         self.populate_filters()
         self.apply_filters()
         self.update_highlight_tabs()
-        messagebox.showinfo("Loaded","Settings successfully loaded.")
+        messagebox.showinfo("Loaded", "Settings successfully loaded.")
+
 
     def parse_asr_file(self, filepath):
         self.ra_data.clear()
@@ -304,308 +375,449 @@ class ASRBrowser(tk.Tk):
         self.hs_data.clear()
         self.co_data.clear()
         with open(filepath, newline="", encoding="utf-8") as f:
-            reader=csv.reader(f, delimiter="|")
+            reader = csv.reader(f, delimiter="|")
             for row in reader:
-                if not row: continue
-                rec_type=row[0]
-                if rec_type=="RA":
-                    if len(row)<31: continue
-                    asr=row[2]
-                    regno=row[3].strip() or "—"
-                    tower_type=row[32].strip() if len(row)>32 else "—"
-                    city=row[24].strip() or "—"
+                if not row:
+                    continue
+                rec_type = row[0]
+                if rec_type == "RA":
+                    if len(row) < 31:
+                        continue
+                    asr = row[2]
+                    regno = row[3].strip() or "—"
+                    tower_type = row[32].strip() if len(row) > 32 else "—"
+                    city = row[24].strip() or "—"
                     try:
-                        height_m=float(row[30])
+                        height_m = float(row[30])
                     except:
-                        height_m=None
-                    self.ra_data[asr]={"regno":regno,"tower_type":tower_type,"city":city,"height_m":height_m}
-                elif rec_type=="EN":
-                    if len(row)<10: continue
-                    asr=row[2]
-                    company=row[9].strip() or "—"
-                    self.en_data[asr]=company
-                elif rec_type=="HS":
-                    if len(row)<7: continue
-                    asr=row[2]
-                    date_str=row[5].strip()
-                    desc=row[6].strip()
+                        height_m = None
+                    self.ra_data[asr] = {"regno": regno, "tower_type": tower_type, "city": city, "height_m": height_m}
+
+                elif rec_type == "EN":
+                    if len(row) < 10:
+                        continue
+                    asr = row[2]
+                    company = row[9].strip() or "—"
+                    self.en_data[asr] = company
+
+                elif rec_type == "HS":
+                    if len(row) < 7:
+                        continue
+                    asr = row[2]
+                    date_str = row[5].strip()
+                    desc = row[6].strip()
                     try:
-                        dt=datetime.datetime.strptime(date_str,"%m/%d/%Y")
+                        dt = datetime.datetime.strptime(date_str, "%m/%d/%Y")
                     except:
                         continue
-                    self.hs_data[asr].append((dt,desc))
-                elif rec_type=="CO":
-                    if len(row)<15: continue
-                    asr=row[2]
+                    self.hs_data[asr].append((dt, desc))
+
+                elif rec_type == "CO":
+                    if len(row) < 15:
+                        continue
+                    asr = row[2]
                     try:
-                        lat_deg=float(row[6]); lat_min=float(row[7]); lat_sec=float(row[8]); lat_hemi=row[9].strip().upper()
-                        lon_deg=float(row[11]); lon_min=float(row[12]); lon_sec=float(row[13]); lon_hemi=row[14].strip().upper()
-                        lat=lat_deg+lat_min/60.0+lat_sec/3600.0
-                        if lat_hemi=='S': lat=-lat
-                        lon=lon_deg+lon_min/60.0+lon_sec/3600.0
-                        if lon_hemi=='W': lon=-lon
-                        lat_str=f"{lat:.6f}"; lon_str=f"{lon:.6f}"
+                        lat_deg = float(row[6]); lat_min = float(row[7]); lat_sec = float(row[8]); lat_hemi = row[9].strip().upper()
+                        lon_deg = float(row[11]); lon_min = float(row[12]); lon_sec = float(row[13]); lon_hemi = row[14].strip().upper()
+                        lat = lat_deg + lat_min/60.0 + lat_sec/3600.0
+                        if lat_hemi == 'S':
+                            lat = -lat
+                        lon = lon_deg + lon_min/60.0 + lon_sec/3600.0
+                        if lon_hemi == 'W':
+                            lon = -lon
+                        lat_str = f"{lat:.6f}"; lon_str = f"{lon:.6f}"
                     except:
-                        lat_str="—"; lon_str="—"
-                    self.co_data[asr]=(lat_str,lon_str)
+                        lat_str = "—"; lon_str = "—"
+                    self.co_data[asr] = (lat_str, lon_str)
+
 
     def build_entries(self):
         self.entries.clear()
-        for asr,info in self.ra_data.items():
-            status="Active"
+        for asr, info in self.ra_data.items():
+            status = "Active"
             if asr in self.hs_data and self.hs_data[asr]:
-                latest_desc=sorted(self.hs_data[asr], key=lambda x:x[0])[-1][1].lower()
+                latest_desc = sorted(self.hs_data[asr], key=lambda x: x[0])[-1][1].lower()
                 if "dismantled" in latest_desc:
-                    status="Dismantled"
+                    status = "Dismantled"
                 elif "canceled" in latest_desc or "cancellation" in latest_desc:
-                    status="Canceled"
+                    status = "Canceled"
                 elif "terminated" in latest_desc:
-                    status="Terminated"
-            company=self.en_data.get(asr,"—")
-            lat,lon=self.co_data.get(asr,("—","—"))
+                    status = "Terminated"
+
+            company = self.en_data.get(asr, "—")
+            lat, lon = self.co_data.get(asr, ("—", "—"))
             if info.get("height_m") is not None:
-                height_ft_val=info["height_m"]*3.28084
-                height_ft=f"{height_ft_val:.1f}"
+                height_ft_val = info["height_m"] * 3.28084
+                height_ft = f"{height_ft_val:.1f}"
             else:
-                height_ft="—"
-            self.entries.append({"regno":info["regno"],"asr":asr,"tower_type":info["tower_type"],"city":info["city"],"company":company,"status":status,"height_ft":height_ft,"latitude":lat,"longitude":lon})
+                height_ft = "—"
+
+            self.entries.append({
+                "regno": info["regno"],
+                "asr": asr,
+                "tower_type": info["tower_type"],
+                "city": info["city"],
+                "company": company,
+                "status": status,
+                "height_ft": height_ft,
+                "latitude": lat,
+                "longitude": lon
+            })
+
 
     def populate_filters(self):
-        types=sorted({e["tower_type"] for e in self.entries if e["tower_type"]})
-        cities=sorted({e["city"] for e in self.entries if e["city"]})
-        statuses=sorted({e["status"] for e in self.entries})
-        companies=sorted({e["company"] for e in self.entries if e["company"]})
-        self.all_types=types; self.all_cities=cities; self.all_statuses=statuses; self.all_companies=companies
-        self.entry_type.delete(0,tk.END); self.entry_city.delete(0,tk.END); self.entry_status.delete(0,tk.END); self.entry_company.delete(0,tk.END)
-        self.entry_height_min.delete(0,tk.END); self.entry_height_max.delete(0,tk.END)
-        self._populate_listbox(self.listbox_type,self.all_types,self.selected_types,self.excluded_types)
-        self._populate_listbox(self.listbox_city,self.all_cities,self.selected_cities,self.excluded_cities)
-        self._populate_listbox(self.listbox_status,self.all_statuses,self.selected_statuses,self.excluded_statuses)
-        self._populate_listbox(self.listbox_company,self.all_companies,self.selected_companies,self.excluded_companies)
+        types = sorted({e["tower_type"] for e in self.entries if e["tower_type"]})
+        cities = sorted({e["city"] for e in self.entries if e["city"]})
+        statuses = sorted({e["status"] for e in self.entries})
+        companies = sorted({e["company"] for e in self.entries if e["company"]})
+        self.all_types = types; self.all_cities = cities; self.all_statuses = statuses; self.all_companies = companies
 
-    def _populate_listbox(self,listbox,items,selected_values,excluded_values):
-        listbox.delete(0,tk.END)
+        self.entry_type.delete(0, tk.END)
+        self.entry_city.delete(0, tk.END)
+        self.entry_status.delete(0, tk.END)
+        self.entry_company.delete(0, tk.END)
+        self.entry_height_min.delete(0, tk.END)
+        self.entry_height_max.delete(0, tk.END)
+
+        self._populate_listbox(self.listbox_type, self.all_types, self.selected_types, self.excluded_types)
+        self._populate_listbox(self.listbox_city, self.all_cities, self.selected_cities, self.excluded_cities)
+        self._populate_listbox(self.listbox_status, self.all_statuses, self.selected_statuses, self.excluded_statuses)
+        self._populate_listbox(self.listbox_company, self.all_companies, self.selected_companies, self.excluded_companies)
+
+
+    def _populate_listbox(self, listbox, items, selected_values, excluded_values):
+        listbox.delete(0, tk.END)
         for item in items:
-            listbox.insert(tk.END,item)
-        for i,val in enumerate(items):
+            listbox.insert(tk.END, item)
+        for i, val in enumerate(items):
             if val in selected_values:
                 listbox.selection_set(i)
             if val in excluded_values:
-                listbox.itemconfig(i, {'bg':'red'})
+                listbox.itemconfig(i, {'bg': 'red'})
 
-    def update_listbox(self,category):
-        if category=="type":
-            search_text=self.entry_type.get().strip().lower(); full_list=self.all_types; listbox=self.listbox_type; selected_set=self.selected_types; excluded_set=self.excluded_types
-        elif category=="city":
-            search_text=self.entry_city.get().strip().lower(); full_list=self.all_cities; listbox=self.listbox_city; selected_set=self.selected_cities; excluded_set=self.excluded_cities
-        elif category=="status":
-            search_text=self.entry_status.get().strip().lower(); full_list=self.all_statuses; listbox=self.listbox_status; selected_set=self.selected_statuses; excluded_set=self.excluded_statuses
-        elif category=="company":
-            search_text=self.entry_company.get().strip().lower(); full_list=self.all_companies; listbox=self.listbox_company; selected_set=self.selected_companies; excluded_set=self.excluded_companies
+
+    def update_listbox(self, category):
+        if category == "type":
+            search_text = self.entry_type.get().strip().lower()
+            full_list = self.all_types
+            listbox = self.listbox_type
+            selected_set = self.selected_types
+            excluded_set = self.excluded_types
+        elif category == "city":
+            search_text = self.entry_city.get().strip().lower()
+            full_list = self.all_cities
+            listbox = self.listbox_city
+            selected_set = self.selected_cities
+            excluded_set = self.excluded_cities
+        elif category == "status":
+            search_text = self.entry_status.get().strip().lower()
+            full_list = self.all_statuses
+            listbox = self.listbox_status
+            selected_set = self.selected_statuses
+            excluded_set = self.excluded_statuses
+        elif category == "company":
+            search_text = self.entry_company.get().strip().lower()
+            full_list = self.all_companies
+            listbox = self.listbox_company
+            selected_set = self.selected_companies
+            excluded_set = self.excluded_companies
         else:
             return
+
         if search_text:
-            filtered=[item for item in full_list if search_text in item.lower()]
+            filtered = [item for item in full_list if search_text in item.lower()]
         else:
-            filtered=full_list[:]
-        self._populate_listbox(listbox,filtered,selected_set,excluded_set)
+            filtered = full_list[:]
+
+        self._populate_listbox(listbox, filtered, selected_set, excluded_set)
         self.apply_filters()
 
-    def on_type_click(self,event):
-        if event.state & 0x0001:
-            index=self.listbox_type.nearest(event.y)
-            value=self.listbox_type.get(index)
+
+    def on_type_click(self, event):
+        if event.state & 0x0001:  
+            index = self.listbox_type.nearest(event.y)
+            value = self.listbox_type.get(index)
             if value in self.excluded_types:
-                self.excluded_types.remove(value); self.listbox_type.itemconfig(index, {'bg':'white'})
+                self.excluded_types.remove(value)
+                self.listbox_type.itemconfig(index, {'bg': 'white'})
             else:
-                self.excluded_types.add(value); self.listbox_type.itemconfig(index, {'bg':'red'})
+                self.excluded_types.add(value)
+                self.listbox_type.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
 
-    def on_city_click(self,event):
+
+    def on_city_click(self, event):
         if event.state & 0x0001:
-            index=self.listbox_city.nearest(event.y)
-            value=self.listbox_city.get(index)
+            index = self.listbox_city.nearest(event.y)
+            value = self.listbox_city.get(index)
             if value in self.excluded_cities:
-                self.excluded_cities.remove(value); self.listbox_city.itemconfig(index, {'bg':'white'})
+                self.excluded_cities.remove(value)
+                self.listbox_city.itemconfig(index, {'bg': 'white'})
             else:
-                self.excluded_cities.add(value); self.listbox_city.itemconfig(index, {'bg':'red'})
+                self.excluded_cities.add(value)
+                self.listbox_city.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
 
-    def on_status_click(self,event):
+
+    def on_status_click(self, event):
         if event.state & 0x0001:
-            index=self.listbox_status.nearest(event.y)
-            value=self.listbox_status.get(index)
+            index = self.listbox_status.nearest(event.y)
+            value = self.listbox_status.get(index)
             if value in self.excluded_statuses:
-                self.excluded_statuses.remove(value); self.listbox_status.itemconfig(index, {'bg':'white'})
+                self.excluded_statuses.remove(value)
+                self.listbox_status.itemconfig(index, {'bg': 'white'})
             else:
-                self.excluded_statuses.add(value); self.listbox_status.itemconfig(index, {'bg':'red'})
+                self.excluded_statuses.add(value)
+                self.listbox_status.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
 
-    def on_company_click(self,event):
+
+    def on_company_click(self, event):
         if event.state & 0x0001:
-            index=self.listbox_company.nearest(event.y)
-            value=self.listbox_company.get(index)
+            index = self.listbox_company.nearest(event.y)
+            value = self.listbox_company.get(index)
             if value in self.excluded_companies:
-                self.excluded_companies.remove(value); self.listbox_company.itemconfig(index, {'bg':'white'})
+                self.excluded_companies.remove(value)
+                self.listbox_company.itemconfig(index, {'bg': 'white'})
             else:
-                self.excluded_companies.add(value); self.listbox_company.itemconfig(index, {'bg':'red'})
+                self.excluded_companies.add(value)
+                self.listbox_company.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
+
 
     def on_type_select(self):
-        visible_items=[self.listbox_type.get(i) for i in range(self.listbox_type.size())]
-        visible_selected={self.listbox_type.get(i) for i in self.listbox_type.curselection()}
-        self.selected_types=(self.selected_types - set(visible_items)) | visible_selected
+        visible_items = [self.listbox_type.get(i) for i in range(self.listbox_type.size())]
+        visible_selected = {self.listbox_type.get(i) for i in self.listbox_type.curselection()}
+        self.selected_types = (self.selected_types - set(visible_items)) | visible_selected
         self.apply_filters()
+
 
     def on_city_select(self):
-        visible_items=[self.listbox_city.get(i) for i in range(self.listbox_city.size())]
-        visible_selected={self.listbox_city.get(i) for i in self.listbox_city.curselection()}
-        self.selected_cities=(self.selected_cities - set(visible_items)) | visible_selected
+        visible_items = [self.listbox_city.get(i) for i in range(self.listbox_city.size())]
+        visible_selected = {self.listbox_city.get(i) for i in self.listbox_city.curselection()}
+        self.selected_cities = (self.selected_cities - set(visible_items)) | visible_selected
         self.apply_filters()
+
 
     def on_status_select(self):
-        visible_items=[self.listbox_status.get(i) for i in range(self.listbox_status.size())]
-        visible_selected={self.listbox_status.get(i) for i in self.listbox_status.curselection()}
-        self.selected_statuses=(self.selected_statuses - set(visible_items)) | visible_selected
+        visible_items = [self.listbox_status.get(i) for i in range(self.listbox_status.size())]
+        visible_selected = {self.listbox_status.get(i) for i in self.listbox_status.curselection()}
+        self.selected_statuses = (self.selected_statuses - set(visible_items)) | visible_selected
         self.apply_filters()
+
 
     def on_company_select(self):
-        visible_items=[self.listbox_company.get(i) for i in range(self.listbox_company.size())]
-        visible_selected={self.listbox_company.get(i) for i in self.listbox_company.curselection()}
-        self.selected_companies=(self.selected_companies - set(visible_items)) | visible_selected
+        visible_items = [self.listbox_company.get(i) for i in range(self.listbox_company.size())]
+        visible_selected = {self.listbox_company.get(i) for i in self.listbox_company.curselection()}
+        self.selected_companies = (self.selected_companies - set(visible_items)) | visible_selected
         self.apply_filters()
+
 
     def clear_filters(self):
-        self.selected_types.clear(); self.selected_cities.clear(); self.selected_statuses.clear(); self.selected_companies.clear()
-        self.excluded_types.clear(); self.excluded_cities.clear(); self.excluded_statuses.clear(); self.excluded_companies.clear()
-        self.entry_type.delete(0,tk.END); self.entry_city.delete(0,tk.END); self.entry_status.delete(0,tk.END); self.entry_company.delete(0,tk.END)
-        self.entry_height_min.delete(0,tk.END); self.entry_height_max.delete(0,tk.END)
-        self._populate_listbox(self.listbox_type,self.all_types,self.selected_types,self.excluded_types)
-        self._populate_listbox(self.listbox_city,self.all_cities,self.selected_cities,self.excluded_cities)
-        self._populate_listbox(self.listbox_status,self.all_statuses,self.selected_statuses,self.excluded_statuses)
-        self._populate_listbox(self.listbox_company,self.all_companies,self.selected_companies,self.excluded_companies)
-        self.sorting_enabled=False
-        self.sort_descending=False
+        self.selected_types.clear()
+        self.selected_cities.clear()
+        self.selected_statuses.clear()
+        self.selected_companies.clear()
+        self.excluded_types.clear()
+        self.excluded_cities.clear()
+        self.excluded_statuses.clear()
+        self.excluded_companies.clear()
+
+        self.entry_type.delete(0, tk.END)
+        self.entry_city.delete(0, tk.END)
+        self.entry_status.delete(0, tk.END)
+        self.entry_company.delete(0, tk.END)
+        self.entry_height_min.delete(0, tk.END)
+        self.entry_height_max.delete(0, tk.END)
+
+        self._populate_listbox(self.listbox_type, self.all_types, self.selected_types, self.excluded_types)
+        self._populate_listbox(self.listbox_city, self.all_cities, self.selected_cities, self.excluded_cities)
+        self._populate_listbox(self.listbox_status, self.all_statuses, self.selected_statuses, self.excluded_statuses)
+        self._populate_listbox(self.listbox_company, self.all_companies, self.selected_companies, self.excluded_companies)
+
+        self.sorting_enabled = False
+        self.sort_descending = False
         self.apply_filters()
 
+
     def apply_filters(self):
-        sel_types=self.selected_types; sel_cities=self.selected_cities; sel_statuses=self.selected_statuses; sel_companies=self.selected_companies
-        min_text=self.entry_height_min.get().strip(); max_text=self.entry_height_max.get().strip()
-        try: min_val=float(min_text) if min_text else None
-        except: min_val=None
-        try: max_val=float(max_text) if max_text else None
-        except: max_val=None
-        filtered=[]
+        sel_types = self.selected_types
+        sel_cities = self.selected_cities
+        sel_statuses = self.selected_statuses
+        sel_companies = self.selected_companies
+
+        min_text = self.entry_height_min.get().strip()
+        max_text = self.entry_height_max.get().strip()
+        try:
+            min_val = float(min_text) if min_text else None
+        except:
+            min_val = None
+        try:
+            max_val = float(max_text) if max_text else None
+        except:
+            max_val = None
+
+        filtered = []
         for e in self.entries:
             if e["tower_type"] in self.excluded_types or e["city"] in self.excluded_cities or e["status"] in self.excluded_statuses or e["company"] in self.excluded_companies:
                 continue
-            if sel_types and e["tower_type"] not in sel_types: continue
-            if sel_cities and e["city"] not in sel_cities: continue
-            if sel_statuses and e["status"] not in sel_statuses: continue
-            if sel_companies and e["company"] not in sel_companies: continue
-            if e["height_ft"]!="—":
-                try: h_val=float(e["height_ft"])
-                except: h_val=None
+            if sel_types and e["tower_type"] not in sel_types:
+                continue
+            if sel_cities and e["city"] not in sel_cities:
+                continue
+            if sel_statuses and e["status"] not in sel_statuses:
+                continue
+            if sel_companies and e["company"] not in sel_companies:
+                continue
+
+            if e["height_ft"] != "—":
+                try:
+                    h_val = float(e["height_ft"])
+                except:
+                    h_val = None
                 if h_val is not None:
-                    if min_val is not None and h_val<min_val: continue
-                    if max_val is not None and h_val>max_val: continue
+                    if min_val is not None and h_val < min_val:
+                        continue
+                    if max_val is not None and h_val > max_val:
+                        continue
             else:
-                if min_val is not None or max_val is not None: continue
+                if min_val is not None or max_val is not None:
+                    continue
+
             filtered.append(e)
+
         if self.sorting_enabled:
-            filtered.sort(key=lambda x: float(x["height_ft"]) if x["height_ft"]!="—" else float('-inf'), reverse=self.sort_descending)
+            filtered.sort(
+                key=lambda x: float(x["height_ft"]) if x["height_ft"] != "—" else float('-inf'),
+                reverse=self.sort_descending
+            )
         self.update_treeview(filtered)
 
-    def update_treeview(self,data_list):
+
+    def update_treeview(self, data_list):
         for row in self.tree.get_children():
             self.tree.delete(row)
         for entry in data_list:
-            asr=entry["asr"]
-            tags=()
-            color=self.highlighted_colors.get(asr)
-            if color=="red": tags=('highlighted_red',)
-            elif color=="green": tags=('highlighted_green',)
-            elif color=="yellow": tags=('highlighted_yellow',)
-            elif color=="blue": tags=('highlighted_blue',)
-            self.tree.insert("", "end", values=(entry["regno"],entry["asr"],entry["tower_type"],entry["city"],entry["company"],entry["status"],entry["height_ft"],entry["latitude"],entry["longitude"]), tags=tags)
+            asr = entry["asr"]
+            tags = ()
+            color = self.highlighted_colors.get(asr)
+            if color == "red":
+                tags = ('highlighted_red',)
+            elif color == "green":
+                tags = ('highlighted_green',)
+            elif color == "yellow":
+                tags = ('highlighted_yellow',)
+            elif color == "blue":
+                tags = ('highlighted_blue',)
+
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    entry["regno"],
+                    entry["asr"],
+                    entry["tower_type"],
+                    entry["city"],
+                    entry["company"],
+                    entry["status"],
+                    entry["height_ft"],
+                    entry["latitude"],
+                    entry["longitude"]
+                ),
+                tags=tags
+            )
+
 
     def sort_by_height(self):
         if not self.sorting_enabled or not self.sort_descending:
-            self.sorting_enabled=True
-            self.sort_descending=True
+            self.sorting_enabled = True
+            self.sort_descending = True
         else:
-            self.sort_descending=False
+            self.sort_descending = False
         self.apply_filters()
 
-    def on_toggle_red(self,event):
+
+    def on_toggle_red(self, event):
         self.tree.focus_set()
-        selected=self.tree.selection()
-        if not selected: return
-        item_id=selected[0]
-        values=self.tree.item(item_id,"values")
-        if not values: return
-        asr=values[1]
-        current_color=self.highlighted_colors.get(asr)
-        if current_color=="red":
+        selected = self.tree.selection()
+        if not selected:
+            return
+        item_id = selected[0]
+        values = self.tree.item(item_id, "values")
+        if not values:
+            return
+        asr = values[1]
+        current_color = self.highlighted_colors.get(asr)
+        if current_color == "red":
             del self.highlighted_colors[asr]
         else:
-            self.highlighted_colors[asr]="red"
+            self.highlighted_colors[asr] = "red"
         self.apply_filters()
         self.update_highlight_tabs()
 
-    def on_toggle_green(self,event):
+
+    def on_toggle_green(self, event):
         self.tree.focus_set()
-        selected=self.tree.selection()
-        if not selected: return
-        item_id=selected[0]
-        values=self.tree.item(item_id,"values")
-        if not values: return
-        asr=values[1]
-        current_color=self.highlighted_colors.get(asr)
-        if current_color=="green":
+        selected = self.tree.selection()
+        if not selected:
+            return
+        item_id = selected[0]
+        values = self.tree.item(item_id, "values")
+        if not values:
+            return
+        asr = values[1]
+        current_color = self.highlighted_colors.get(asr)
+        if current_color == "green":
             del self.highlighted_colors[asr]
         else:
-            self.highlighted_colors[asr]="green"
+            self.highlighted_colors[asr] = "green"
         self.apply_filters()
         self.update_highlight_tabs()
 
-    def on_toggle_yellow(self,event):
+
+    def on_toggle_yellow(self, event):
         self.tree.focus_set()
-        selected=self.tree.selection()
-        if not selected: return
-        item_id=selected[0]
-        values=self.tree.item(item_id,"values")
-        if not values: return
-        asr=values[1]
-        current_color=self.highlighted_colors.get(asr)
-        if current_color=="yellow":
+        selected = self.tree.selection()
+        if not selected:
+            return
+        item_id = selected[0]
+        values = self.tree.item(item_id, "values")
+        if not values:
+            return
+        asr = values[1]
+        current_color = self.highlighted_colors.get(asr)
+        if current_color == "yellow":
             del self.highlighted_colors[asr]
         else:
-            self.highlighted_colors[asr]="yellow"
+            self.highlighted_colors[asr] = "yellow"
         self.apply_filters()
         self.update_highlight_tabs()
 
-    def on_toggle_blue(self,event):
+
+    def on_toggle_blue(self, event):
         self.tree.focus_set()
-        selected=self.tree.selection()
-        if not selected: return
-        item_id=selected[0]
-        values=self.tree.item(item_id,"values")
-        if not values: return
-        asr=values[1]
-        current_color=self.highlighted_colors.get(asr)
-        if current_color=="blue":
+        selected = self.tree.selection()
+        if not selected:
+            return
+        item_id = selected[0]
+        values = self.tree.item(item_id, "values")
+        if not values:
+            return
+        asr = values[1]
+        current_color = self.highlighted_colors.get(asr)
+        if current_color == "blue":
             del self.highlighted_colors[asr]
         else:
-            self.highlighted_colors[asr]="blue"
+            self.highlighted_colors[asr] = "blue"
         self.apply_filters()
         self.update_highlight_tabs()
 
-    def copy_cell_to_clipboard(self,event):
+
+    def copy_cell_to_clipboard(self, event):
         tree = event.widget
         item_id = tree.identify_row(event.y)
         column_id = tree.identify_column(event.x)
@@ -616,6 +828,7 @@ class ASRBrowser(tk.Tk):
             values = tree.item(item_id, "values")
         except:
             return
+
         if col_index in (7, 8):
             lat = values[7]
             lon = values[8]
@@ -628,19 +841,148 @@ class ASRBrowser(tk.Tk):
         else:
             cell_value = values[col_index]
             col_name = tree.heading(column_id)["text"]
+
         self.clipboard_clear()
         self.clipboard_append(cell_value)
         messagebox.showinfo("Copied", f"{col_name} '{cell_value}' copied to clipboard")
 
-    def update_highlight_tabs(self):
-        for tree,color,tag in ((self.tree_red,"red","highlighted_red"),(self.tree_green,"green","highlighted_green"),(self.tree_yellow,"yellow","highlighted_yellow"),(self.tree_blue,"blue","highlighted_blue")):
-            for row in tree.get_children():
-                tree.delete(row)
-            for entry in self.entries:
-                asr=entry["asr"]
-                if self.highlighted_colors.get(asr)==color:
-                    tree.insert("", "end", values=(entry["regno"],entry["asr"],entry["tower_type"],entry["city"],entry["company"],entry["status"],entry["height_ft"],entry["latitude"],entry["longitude"]), tags=(tag,))
 
-if __name__=="__main__":
-    app=ASRBrowser()
+    def update_highlight_tabs(self):
+        for tree_widget, color, tag in (
+            (self.tree_red, "red", "highlighted_red"),
+            (self.tree_green, "green", "highlighted_green"),
+            (self.tree_yellow, "yellow", "highlighted_yellow"),
+            (self.tree_blue, "blue", "highlighted_blue")
+        ):
+            for row in tree_widget.get_children():
+                tree_widget.delete(row)
+            for entry in self.entries:
+                asr = entry["asr"]
+                if self.highlighted_colors.get(asr) == color:
+                    tree_widget.insert(
+                        "",
+                        "end",
+                        values=(
+                            entry["regno"],
+                            entry["asr"],
+                            entry["tower_type"],
+                            entry["city"],
+                            entry["company"],
+                            entry["status"],
+                            entry["height_ft"],
+                            entry["latitude"],
+                            entry["longitude"]
+                        ),
+                        tags=(tag,)
+                    )
+
+
+    def show_map(self):
+        items = self.tree.get_children()
+        valid_coords = []
+        for item in items:
+            vals = self.tree.item(item, "values")
+            lat_str, lon_str = vals[7], vals[8]
+            if lat_str != "—" and lon_str != "—":
+                try:
+                    lat = float(lat_str)
+                    lon = float(lon_str)
+                except ValueError:
+                    continue
+                regno = vals[0]
+                asr = vals[1]
+                tower_type = vals[2]
+                city = vals[3]
+                company = vals[4]
+                status = vals[5]
+                height = vals[6]
+                color = self.highlighted_colors.get(asr, None)
+                marker_color = color if color in ("red", "green", "yellow", "blue") else "gray"
+                valid_coords.append({
+                    "regno": regno,
+                    "asr": asr,
+                    "tower_type": tower_type,
+                    "city": city,
+                    "company": company,
+                    "status": status,
+                    "height": height,
+                    "lat": lat,
+                    "lon": lon,
+                    "color": marker_color
+                })
+
+        if not valid_coords:
+            messagebox.showinfo("No Data", "No towers with valid coordinates to map.")
+            return
+
+        first = valid_coords[0]
+        fmap = folium.Map(
+            location=[first["lat"], first["lon"]],
+            zoom_start=6,
+            tiles=None,
+            width='100%',
+            height='100%'
+        )
+        folium.TileLayer(
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attr='Esri',
+            name='Esri Satellite',
+            overlay=False,
+            control=True
+        ).add_to(fmap)
+        folium.TileLayer(
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+            attr='Esri',
+            name='Esri Labels',
+            overlay=True,
+            control=True
+        ).add_to(fmap)
+
+        for info in valid_coords:
+            lat = info["lat"]
+            lon = info["lon"]
+            popup_html = f"""
+            <table style="font-family:Arial;font-size:13px;line-height:1.4;border-collapse:collapse;">
+              <tr><td style="font-weight:bold;padding:2px;">Reg No:</td><td style="padding:2px;">{info["regno"]}</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">ASR:</td><td style="padding:2px;">{info["asr"]}</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">Type:</td><td style="padding:2px;">{info["tower_type"]}</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">City:</td><td style="padding:2px;">{info["city"]}</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">Company:</td><td style="padding:2px;">{info["company"]}</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">Status:</td><td style="padding:2px;">{info["status"]}</td></tr>
+              <tr><td style="font-weight:bold;color:#1a73e8;padding:2px;">Height:</td><td style="padding:2px;font-size:14px;">{info["height"]} ft</td></tr>
+              <tr><td style="font-weight:bold;padding:2px;">Coordinates:</td><td style="padding:2px;">{lat:.6f}, {lon:.6f}</td></tr>
+              <tr><td colspan="2" style="padding:2px;text-align:center;">
+                <a href="https://www.google.com/maps?q=&layer=c&cbll={lat},{lon}" target="_blank">View Street View</a>
+              </td></tr>
+            </table>
+            """
+            iframe = folium.IFrame(html=popup_html, width=300, height=200)
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=7,
+                color=info["color"],
+                fill=True,
+                fill_color=info["color"],
+                fill_opacity=0.8,
+                popup=folium.Popup(iframe)
+            ).add_to(fmap)
+
+        folium.LayerControl().add_to(fmap)
+
+        with NamedTemporaryFile("w", delete=False, suffix=".html") as tmp:
+            fmap.save(tmp.name)
+            directory, filename = os.path.split(tmp.name)
+            os.chdir(directory)
+            handler = http.server.SimpleHTTPRequestHandler
+            httpd = socketserver.TCPServer(("localhost", 0), handler)
+            port = httpd.server_address[1]
+            def serve():
+                httpd.serve_forever()
+            thread = threading.Thread(target=serve, daemon=True)
+            thread.start()
+            webbrowser.open(f"http://localhost:{port}/{filename}")
+
+
+if __name__ == "__main__":
+    app = ASRBrowser()
     app.mainloop()
