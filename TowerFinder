@@ -13,10 +13,12 @@ import threading
 import http.server
 import socketserver
 
+class SilentHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args, **kwargs):
+        pass
+
 def resource_path(relative_path):
-   
     try:
-       
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
@@ -25,15 +27,13 @@ def resource_path(relative_path):
 class ASRBrowser(tk.Tk):
     def __init__(self):
         super().__init__()
-
-      
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._httpd = None
         icon_path = resource_path("icon.ico")
         try:
             self.iconbitmap(icon_path)
-        except Exception:
-         
+        except:
             pass
-
         self.title("Tower Finder")
         self.geometry("1400x900")
         self.configure(padx=10, pady=10)
@@ -77,7 +77,6 @@ class ASRBrowser(tk.Tk):
         for col in (0,2,4,6,8):
             filter_frame.columnconfigure(col, weight=1)
 
-    
         frame_type = ttk.Frame(filter_frame)
         frame_type.grid(row=0, column=0, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_type.columnconfigure(0, weight=1)
@@ -96,7 +95,6 @@ class ASRBrowser(tk.Tk):
         self.listbox_type.configure(yscrollcommand=scrollbar_type.set)
         scrollbar_type.pack(side="right", fill="y")
 
-      
         frame_city = ttk.Frame(filter_frame)
         frame_city.grid(row=0, column=2, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_city.columnconfigure(0, weight=1)
@@ -115,7 +113,6 @@ class ASRBrowser(tk.Tk):
         self.listbox_city.configure(yscrollcommand=scrollbar_city.set)
         scrollbar_city.pack(side="right", fill="y")
 
- 
         frame_status = ttk.Frame(filter_frame)
         frame_status.grid(row=0, column=4, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_status.columnconfigure(0, weight=1)
@@ -134,7 +131,6 @@ class ASRBrowser(tk.Tk):
         self.listbox_status.configure(yscrollcommand=scrollbar_status.set)
         scrollbar_status.pack(side="right", fill="y")
 
-     
         frame_company = ttk.Frame(filter_frame)
         frame_company.grid(row=0, column=6, rowspan=3, columnspan=2, sticky="nsew", padx=(5,10), pady=5)
         frame_company.columnconfigure(0, weight=1)
@@ -263,10 +259,8 @@ class ASRBrowser(tk.Tk):
         vsb_b.pack(side="right", fill="y")
         self.tree_blue.bind("<Double-1>", self.copy_cell_to_clipboard)
 
-     
         map_btn = ttk.Button(self, text="Show Map", command=self.show_map)
         map_btn.grid(row=2, column=0, pady=(10,0))
-
 
     def load_file(self):
         path = filedialog.askopenfilename(title="FCC txt file", filetypes=[("Text files","*.txt"),("All files","*.*")])
@@ -282,7 +276,6 @@ class ASRBrowser(tk.Tk):
         self.populate_filters()
         self.apply_filters()
         self.update_highlight_tabs()
-
 
     def save_settings(self):
         if not self.current_file:
@@ -310,7 +303,6 @@ class ASRBrowser(tk.Tk):
             messagebox.showinfo("Settings Saved", f"Settings saved to:\n{save_path}")
         except Exception as e:
             messagebox.showerror("Error Saving", str(e))
-
 
     def load_settings(self):
         path = filedialog.askopenfilename(title="Load Settings", defaultextension=".json", filetypes=[("JSON files","*.json"),("All files","*.*")])
@@ -367,7 +359,6 @@ class ASRBrowser(tk.Tk):
         self.apply_filters()
         self.update_highlight_tabs()
         messagebox.showinfo("Loaded", "Settings successfully loaded.")
-
 
     def parse_asr_file(self, filepath):
         self.ra_data.clear()
@@ -430,7 +421,6 @@ class ASRBrowser(tk.Tk):
                         lat_str = "—"; lon_str = "—"
                     self.co_data[asr] = (lat_str, lon_str)
 
-
     def build_entries(self):
         self.entries.clear()
         for asr, info in self.ra_data.items():
@@ -464,7 +454,6 @@ class ASRBrowser(tk.Tk):
                 "longitude": lon
             })
 
-
     def populate_filters(self):
         types = sorted({e["tower_type"] for e in self.entries if e["tower_type"]})
         cities = sorted({e["city"] for e in self.entries if e["city"]})
@@ -484,7 +473,6 @@ class ASRBrowser(tk.Tk):
         self._populate_listbox(self.listbox_status, self.all_statuses, self.selected_statuses, self.excluded_statuses)
         self._populate_listbox(self.listbox_company, self.all_companies, self.selected_companies, self.excluded_companies)
 
-
     def _populate_listbox(self, listbox, items, selected_values, excluded_values):
         listbox.delete(0, tk.END)
         for item in items:
@@ -494,7 +482,6 @@ class ASRBrowser(tk.Tk):
                 listbox.selection_set(i)
             if val in excluded_values:
                 listbox.itemconfig(i, {'bg': 'red'})
-
 
     def update_listbox(self, category):
         if category == "type":
@@ -532,9 +519,8 @@ class ASRBrowser(tk.Tk):
         self._populate_listbox(listbox, filtered, selected_set, excluded_set)
         self.apply_filters()
 
-
     def on_type_click(self, event):
-        if event.state & 0x0001:  
+        if event.state & 0x0001:
             index = self.listbox_type.nearest(event.y)
             value = self.listbox_type.get(index)
             if value in self.excluded_types:
@@ -545,7 +531,6 @@ class ASRBrowser(tk.Tk):
                 self.listbox_type.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
-
 
     def on_city_click(self, event):
         if event.state & 0x0001:
@@ -560,7 +545,6 @@ class ASRBrowser(tk.Tk):
             self.apply_filters()
             return "break"
 
-
     def on_status_click(self, event):
         if event.state & 0x0001:
             index = self.listbox_status.nearest(event.y)
@@ -573,7 +557,6 @@ class ASRBrowser(tk.Tk):
                 self.listbox_status.itemconfig(index, {'bg': 'red'})
             self.apply_filters()
             return "break"
-
 
     def on_company_click(self, event):
         if event.state & 0x0001:
@@ -588,13 +571,11 @@ class ASRBrowser(tk.Tk):
             self.apply_filters()
             return "break"
 
-
     def on_type_select(self):
         visible_items = [self.listbox_type.get(i) for i in range(self.listbox_type.size())]
         visible_selected = {self.listbox_type.get(i) for i in self.listbox_type.curselection()}
         self.selected_types = (self.selected_types - set(visible_items)) | visible_selected
         self.apply_filters()
-
 
     def on_city_select(self):
         visible_items = [self.listbox_city.get(i) for i in range(self.listbox_city.size())]
@@ -602,20 +583,17 @@ class ASRBrowser(tk.Tk):
         self.selected_cities = (self.selected_cities - set(visible_items)) | visible_selected
         self.apply_filters()
 
-
     def on_status_select(self):
         visible_items = [self.listbox_status.get(i) for i in range(self.listbox_status.size())]
         visible_selected = {self.listbox_status.get(i) for i in self.listbox_status.curselection()}
         self.selected_statuses = (self.selected_statuses - set(visible_items)) | visible_selected
         self.apply_filters()
 
-
     def on_company_select(self):
         visible_items = [self.listbox_company.get(i) for i in range(self.listbox_company.size())]
         visible_selected = {self.listbox_company.get(i) for i in self.listbox_company.curselection()}
         self.selected_companies = (self.selected_companies - set(visible_items)) | visible_selected
         self.apply_filters()
-
 
     def clear_filters(self):
         self.selected_types.clear()
@@ -642,7 +620,6 @@ class ASRBrowser(tk.Tk):
         self.sorting_enabled = False
         self.sort_descending = False
         self.apply_filters()
-
 
     def apply_filters(self):
         sel_types = self.selected_types
@@ -697,7 +674,6 @@ class ASRBrowser(tk.Tk):
             )
         self.update_treeview(filtered)
 
-
     def update_treeview(self, data_list):
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -731,7 +707,6 @@ class ASRBrowser(tk.Tk):
                 tags=tags
             )
 
-
     def sort_by_height(self):
         if not self.sorting_enabled or not self.sort_descending:
             self.sorting_enabled = True
@@ -739,7 +714,6 @@ class ASRBrowser(tk.Tk):
         else:
             self.sort_descending = False
         self.apply_filters()
-
 
     def on_toggle_red(self, event):
         self.tree.focus_set()
@@ -759,7 +733,6 @@ class ASRBrowser(tk.Tk):
         self.apply_filters()
         self.update_highlight_tabs()
 
-
     def on_toggle_green(self, event):
         self.tree.focus_set()
         selected = self.tree.selection()
@@ -777,7 +750,6 @@ class ASRBrowser(tk.Tk):
             self.highlighted_colors[asr] = "green"
         self.apply_filters()
         self.update_highlight_tabs()
-
 
     def on_toggle_yellow(self, event):
         self.tree.focus_set()
@@ -797,7 +769,6 @@ class ASRBrowser(tk.Tk):
         self.apply_filters()
         self.update_highlight_tabs()
 
-
     def on_toggle_blue(self, event):
         self.tree.focus_set()
         selected = self.tree.selection()
@@ -816,16 +787,15 @@ class ASRBrowser(tk.Tk):
         self.apply_filters()
         self.update_highlight_tabs()
 
-
     def copy_cell_to_clipboard(self, event):
-        tree = event.widget
-        item_id = tree.identify_row(event.y)
-        column_id = tree.identify_column(event.x)
+        tree_widget = event.widget
+        item_id = tree_widget.identify_row(event.y)
+        column_id = tree_widget.identify_column(event.x)
         if not item_id or not column_id:
             return
         try:
             col_index = int(column_id.replace("#", "")) - 1
-            values = tree.item(item_id, "values")
+            values = tree_widget.item(item_id, "values")
         except:
             return
 
@@ -837,15 +807,14 @@ class ASRBrowser(tk.Tk):
                 col_name = "Lat/Long"
             else:
                 cell_value = values[col_index]
-                col_name = tree.heading(column_id)["text"]
+                col_name = tree_widget.heading(column_id)["text"]
         else:
             cell_value = values[col_index]
-            col_name = tree.heading(column_id)["text"]
+            col_name = tree_widget.heading(column_id)["text"]
 
         self.clipboard_clear()
         self.clipboard_append(cell_value)
         messagebox.showinfo("Copied", f"{col_name} '{cell_value}' copied to clipboard")
-
 
     def update_highlight_tabs(self):
         for tree_widget, color, tag in (
@@ -875,7 +844,6 @@ class ASRBrowser(tk.Tk):
                         ),
                         tags=(tag,)
                     )
-
 
     def show_map(self):
         items = self.tree.get_children()
@@ -973,15 +941,22 @@ class ASRBrowser(tk.Tk):
             fmap.save(tmp.name)
             directory, filename = os.path.split(tmp.name)
             os.chdir(directory)
-            handler = http.server.SimpleHTTPRequestHandler
-            httpd = socketserver.TCPServer(("localhost", 0), handler)
-            port = httpd.server_address[1]
-            def serve():
-                httpd.serve_forever()
-            thread = threading.Thread(target=serve, daemon=True)
-            thread.start()
+            handler = SilentHandler
+            self._httpd = socketserver.TCPServer(("localhost", 0), handler)
+            port = self._httpd.server_address[1]
+            threading.Thread(target=self._httpd.serve_forever, daemon=True).start()
             webbrowser.open(f"http://localhost:{port}/{filename}")
 
+    def _on_close(self):
+        if self._httpd:
+            def stopper():
+                try:
+                    self._httpd.shutdown()
+                    self._httpd.server_close()
+                finally:
+                    self._httpd = None
+            threading.Thread(target=stopper, daemon=True).start()
+        self.destroy()
 
 if __name__ == "__main__":
     app = ASRBrowser()
