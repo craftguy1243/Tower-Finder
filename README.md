@@ -9,3 +9,5 @@ Displays tower registration number, ASR, and longitude + latitude (suitable for 
 Supports loading and saving configurations
 
 For a tutorial on how to use this program please refer to the wiki
+
+Feature requests, reccomendations, and issues are appreciated
