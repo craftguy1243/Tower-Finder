@@ -365,7 +365,8 @@ class ASRBrowser(tk.Tk):
         self.en_data.clear()
         self.hs_data.clear()
         self.co_data.clear()
-        with open(filepath, newline="", encoding="utf-8") as f:
+        with open(filepath, newline="", encoding="latin-1") as f:
+
             reader = csv.reader(f, delimiter="|")
             for row in reader:
                 if not row:
